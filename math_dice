@@ -1,0 +1,208 @@
+#!/usr/bin/env python3.9
+# Math Dice: Play, Solve, Analyze, Generate
+# Skye Rhomberg
+
+import md_humanizer as h, md_parser as p, md_solver as s
+import argparse, random
+import itertools as it
+
+##########################################################################################
+# Defs
+
+# Default Solution Database
+DEFAULT_SOLS_DB = 'sols'
+# Var to be modified if user loads own sols db
+_sols = DEFAULT_SOLS_DB
+
+##########################################################################################
+# Display Help
+
+def _box(rstr):
+    '''
+    Bount multiline String in a nice box
+    Treat $$$s as horizontal dividers
+    '''
+    nl = '\n'
+    ln = max([len(l) for l in rstr.split('\n')])
+    div = f'+{"-"*(ln+2)}+'
+    fmt = lambda l: f'| {l:{ln+1}}|' if l != '$$$' else div
+    return '\n'.join([div]+[fmt(l) for l in rstr.split('\n')]+[div])
+
+##########################################################################################
+# Main Functions
+
+def solve(w_dice,b_dice,just_best=False,show_eq=False):
+    '''
+    Nicely format all solutions for the given dice
+    Input:
+    w_dice: 5-tuple of int. white dice config
+    b_dice: int. black dice total
+    just_best: bool. If true, only show solutions that score best
+    show_eq: bool. If true, show non-normalized alternatives to each solution
+    Output:
+    str. info displayed
+    '''
+    if type(w_dice) is int:
+        w_dice = tuple([int(d) for d in str(w_dice)])
+    # Row Dividers
+    dv = f"+{'-'*23}+{'-'*5}+"
+    # Header
+    head = '\n'.join([dv,f'|Solution{" "*15}|Score|',dv])
+    # Format Alternatives List
+    lst = lambda l: '\n'.join([f'|---> {s:24}|' for s in l]+[dv])
+    # Get Solutions
+    hs = h.humanize(s.get_sols(w_dice,b_dice,_sols))
+    # Join all solutions, or just best if flag set
+    return '\n'.join([head]+[f'| {e:22}|{s:>4} |'+'\n'+dv+('\n'+lst(l))*show_eq\
+            for ((e,s),l) in hs if s <= hs[0][0][1] or not just_best])
+
+def analyze(w_dice,b_dice,solution,score=False,norml=False,eqs=False,opt=False,alts=False):
+    '''
+    Format an analysis of the given solution
+    Show score, normalization, equivalencies, alternatives, optimality
+    Input:
+    w_dice: 5-tuple of int. white dice config
+    b_dice: int. black dice total
+    solution: str. INFIX solution candidate to w_dice | b_dice
+    score: bool. if true, show score
+    norml: bool. if true, show normalized solution
+    eqs: bool. if true, show equivalent solutions
+    opt: bool. if true, show whether solution is optimal and give optimal solution
+    alts: bool. if true, show alternate solutions which also score best
+    Output:
+    str. info displayed
+    '''
+    if type(w_dice) is int:
+        w_dice = tuple([int(d) for d in str(w_dice)])
+    true_sol = p.evaluate(solution,mode='infix')
+    bad_dice = tuple(sorted([int(t) for t in solution if t.isdigit()])) != w_dice
+    inc = b_dice != true_sol or bad_dice
+    correctstr = "Wrong Dice" if bad_dice else f'{"Not "*inc}Correct'
+    h_sols = h.humanize(s.get_sols(w_dice,b_dice,_sols)) if any((eqs,opt,alts)) else None
+    norm = h.normalize(p.shunt(solution)) if not inc else None
+    eq = {e:l for ((e,s),l) in h_sols}[norm] if eqs and not inc else None
+    sl = p.score(solution)
+    nopt = (sl != h_sols[0][0][1]) if opt else None
+    noptstr = (" | "+"Not "*nopt+"Optimal") if opt else ""
+    alt = [e for ((e,s),l) in h_sols if s==h_sols[0][0][1] and e!=norm] if alts else None
+    nl = '\n'
+    rstr = (
+            f'{solution} = {true_sol} | {correctstr}'
+            f'{(nl+"Score: "+str(sl)+noptstr)*score*(not inc)}'
+            f'{(nl+"Normalized: "+norm) if norml and not inc else ""}'
+            f'{(nl+"$$$")*((eqs or alts) and not inc)}'
+            f'{(nl+"Equivalents:")*eqs*(not inc)}'
+            f'{(nl+"+ ").join([""]+eq) if eqs and not inc else ""}'
+            f'{(nl+"$$$")*(alts)}'
+            f'{(nl+"Optimal "*(nopt or inc or not opt)+"Alternatives:")*alts}'
+            f'{(nl+"+ ").join([""]+alt) if alts else ""}'
+            )
+    return _box(rstr)
+
+def generate(db_name,unary,unsolved=True,verbose='True'):
+    '''
+    Generate new sols db
+    Input:
+    db_name: str. name of new db
+    unary: tuple of int. number of unaries for each run, in order (e.g. range(7))
+    mode: str. if unsolved, only gen solutions to unsolved. if all, do all
+    '''
+    ws = None
+    for i in unary:
+        s.make_sols_db('new_sols',ws,i,verbose)
+        if unsolved:
+            ws = s.get_all_unsolvable('new_sols')
+    return ''
+
+##########################################################################################
+# Game
+
+def _shuffle(w_init,b_init):
+    w_dice = w_init if w_init else\
+            random.choice([c for c in it.combinations_with_replacement(range(1,7),5)])
+    b_dice = b_init if b_init else\
+            random.choice([10*(i+1)+j+1 for i in range(6) for j in range(6)])
+    return w_dice, b_dice
+
+def game(w_init=None,b_init=None,score=False,norml=False,opt=False):
+    '''
+    Math dice game: initialized or randomized config,
+    Test user-input solutions
+    '''
+    if type(w_init) is int:
+        w_init = tuple([int(d) for d in str(w_init)])
+    w_dice, b_dice = _shuffle(w_init,b_init)
+    print(f'Math Dice : [Return] to Exit, "[n]ext", or "[s]olve"')
+    print(_box(f'{" ".join([str(w) for w in w_dice])} | {b_dice}'))
+    while expr := input('Enter Expression: '):
+        if expr.lower() in ['solve','s']:
+            print(solve(w_dice,b_dice,True,False))
+        elif expr.lower() in ['next', 'n']:
+            w_dice, b_dice = _shuffle(None,None)
+            print(f'Math Dice : [Return] to Exit, "[n]ext", or "[s]olve"')
+            print(_box(f'{" ".join([str(w) for w in w_dice])} | {b_dice}'))
+        else:
+            print(analyze(w_dice,b_dice,expr,score,norml,False,opt,False))
+    return ''
+
+
+##########################################################################################
+# CLI
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-C', '--config', nargs='?', help='alternate sols db')
+subparsers = parser.add_subparsers(title='modes', dest='mode', description='valid modes')
+
+# Game
+_game = subparsers.add_parser('game', help='Play Math-Dice Game')
+_game.add_argument('w_init', default=None, nargs='?', type=int,\
+        help='Init White-Dice (Leave Blank for Random)')
+_game.add_argument('b_init', default=None, nargs='?', type=int,\
+        help='Init Black-Dice (Leave Blank for Random)')
+_game.add_argument('-s', '--score', action='store_true', help='Show Score')
+_game.add_argument('-n', '--norml', action='store_true', help='Show Normalized Expr')
+_game.add_argument('-o', '--opt', action='store_true', help='Show if Solution Optimal')
+
+# Analyze
+_analyze = subparsers.add_parser('analyze', help='Analyze Given Solution')
+_analyze.add_argument('w_dice', type=int, help='White Dice')
+_analyze.add_argument('b_dice', type=int, help='Black Dice')
+_analyze.add_argument('solution', help='Infix Solution String (Enclosed in QUOTES)')
+_analyze.add_argument('-s', '--score', action='store_true', help='Show Score')
+_analyze.add_argument('-n', '--norml', action='store_true', help='Show Normalized Expr')
+_analyze.add_argument('-o', '--opt', action='store_true', help='Show if Solution Optimal')
+_analyze.add_argument('-e', '--eqs', action='store_true', help='Show Equivalent Exprs')
+_analyze.add_argument('-a', '--alts', action='store_true', help='Show Alternate Solutions')
+
+# Solve
+_solve = subparsers.add_parser('solve', help='Solve Given Configuration')
+_solve.add_argument('w_dice', type=int, help='White Dice')
+_solve.add_argument('b_dice', type=int, help='Black Dice')
+_solve.add_argument('-b', '--just_best', action='store_true',\
+        help='Only Optimal Solutions')
+_solve.add_argument('-q', '--show_eq', action='store_true', help='Show Equivalent Sols')
+
+# Generate
+_generate = subparsers.add_parser('generate',\
+        help='Generate New Sols Database')
+_generate.add_argument('db_name', help='New Database Name')
+_generate.add_argument('unary', nargs='+', type=int,\
+        help='Numbers of unary ops for each run')
+_generate.add_argument('-u', '--unsolved', action='store_true',\
+        help='Only Solve for Unsolved from previous runs')
+_generate.add_argument('-v', '--verbose', action='store_true', help='Verbose Mode')
+
+##########################################################################################
+# Main Code
+
+def main(config,mode,**kwargs):
+    if config:
+        _sols = config
+    if not mode:
+        print('Try math_dice -h for usage')
+        exit()
+    print(globals()[mode](**kwargs))
+
+if __name__ == '__main__':
+    kwargs = vars(parser.parse_args())
+    main(**kwargs)
