@@ -1,5 +1,11 @@
 # math_dice
 
+The math dice are an obscure educational game meant to teach children arithmetic. The version pictured is nearly impossible to buy online, but boardgamegeek sells a toy called the [Number Jumbler](https://boardgamegeek.com/boardgame/18029/number-jumbler), which is the same except the white dice are colored.
+
+To play the game, use each of the numbers on the white dice once and only once to write a mathematical expression which evaluates to the total on the black dice. Any mathematical expressions are allowable are in theory. In this repository, I consider the usual operations of addition, subtraction, multiplication, division, and exponents, as well as the factorial (`5! = 5*4*3*2*1`) and the "plus-torial" or "termial" (`5? = 5+4+3+2+1`).
+
+This repo can generate all possible solutions to all the math dice puzzles using less than `n` factorials and/or termials. The zipped solutions database included goes up to `n=6`. At this depth, every puzzle has a solution except for one: `1 1 1 1 1` on the white dice and `51` on the black dice.
+
 ## Installation
 Clone this repository,
 ```
